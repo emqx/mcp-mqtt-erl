@@ -1,9 +1,10 @@
-mcp_mqtt_erl
-=====
+# mcp_mqtt_erl
 
 The MCP over MQTT Erlang SDK for both MCP clients and servers.
 
-Build
------
+## Build
 
-    $ make compile
+```bash
+$ make compile
+```
+
