@@ -1,0 +1,15 @@
+{application, mcp_mqtt_erl,
+ [{description, "The Erlang SDK for the MCP over MQTT protocol"},
+  {vsn, git},
+  {registered, []},
+  {mod, {mcp_mqtt_erl_app, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {licenses, ["Apache 2.0"]},
+  {links, []}
+ ]}.
