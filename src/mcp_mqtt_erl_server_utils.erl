@@ -10,7 +10,7 @@
     make_json_result/1
 ]).
 
--spec get_tool_definitions_from_json(file:name_all() | [file:name_all()]) ->
+-spec get_tool_definitions_from_json(binary() | [binary()]) ->
     {ok, [map()]} | {error, error_response()}.
 get_tool_definitions_from_json(JsonFiles) when is_list(JsonFiles) ->
     Result = lists:foldl(
@@ -29,10 +29,10 @@ get_tool_definitions_from_json(JsonFiles) when is_list(JsonFiles) ->
     case Result of
         {ToolDefs, []} ->
             {ok, ToolDefs};
-        {_, Errs} ->
-            {error, Errs}
+        {_, [Err | _]} ->
+            {error, Err}
     end;
-get_tool_definitions_from_json(JsonFile) ->
+get_tool_definitions_from_json(JsonFile) when is_binary(JsonFile) ->
     maybe
         {ok, Json} ?= file:read_file(JsonFile),
         JsonM = json:decode(Json),
@@ -57,7 +57,7 @@ get_tool_definitions_from_json(JsonFile) ->
                 "Failed to read tool definitions from JSON file, reason: ~p", [Reason]
             ),
             {error, #{
-                code => ?ERR_C_INTERNAL_ERROR,
+                code => 500,
                 message => ReasonStr,
                 data => #{filename => JsonFile}
             }}
