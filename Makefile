@@ -1,6 +1,5 @@
 export BUILD_WITHOUT_QUIC = 1
 
-## Feature Used in rebar plugin emqx_plugrel
 ## The Feature have not enabled by default on OTP25
 export ERL_FLAGS ?= -enable-feature maybe_expr
 
@@ -45,10 +44,6 @@ distclean:
 	@rm -rf _build
 	@rm -f rebar.lock
 
-.PHONY: rel
-rel: $(REBAR)
-	$(REBAR) emqx_plugrel tar
-
 .PHONY: fmt
 fmt: $(REBAR)
 	$(REBAR) fmt --verbose -w
@@ -56,10 +51,6 @@ fmt: $(REBAR)
 .PHONY: fmt-check
 fmt-check: $(REBAR)
 	$(REBAR) fmt --verbose --check
-
-.PHONY: run
-run: rel
-	./scripts/run.sh emqx/emqx-enterprise:5.9.0
 
 .PHONY: test
 test: $(REBAR)

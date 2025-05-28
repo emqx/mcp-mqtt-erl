@@ -32,18 +32,20 @@ get_tool_definitions_from_json(JsonFiles) when is_list(JsonFiles) ->
         {_, Errs} ->
             {error, Errs}
     end;
-
 get_tool_definitions_from_json(JsonFile) ->
     maybe
         {ok, Json} ?= file:read_file(JsonFile),
         JsonM = json:decode(Json),
         ToolDefs = maps:fold(
             fun(Name, Def, Acc) ->
-                [#{
-                    name => Name,
-                    description => get_tool_description(Def),
-                    inputSchema => maps:get(<<"inputSchema">>, Def, #{})
-                } | Acc]
+                [
+                    #{
+                        name => Name,
+                        description => get_tool_description(Def),
+                        inputSchema => maps:get(<<"inputSchema">>, Def, #{})
+                    }
+                    | Acc
+                ]
             end,
             [],
             JsonM
@@ -51,10 +53,14 @@ get_tool_definitions_from_json(JsonFile) ->
         {ok, ToolDefs}
     else
         {error, Reason} ->
-            ReasonStr = format_error_msg("Failed to read tool definitions from JSON file, reason: ~p", [Reason]),
-            {error, #{code => ?ERR_C_INTERNAL_ERROR,
-                      message => ReasonStr,
-                      data => #{filename => JsonFile}}}
+            ReasonStr = format_error_msg(
+                "Failed to read tool definitions from JSON file, reason: ~p", [Reason]
+            ),
+            {error, #{
+                code => ?ERR_C_INTERNAL_ERROR,
+                message => ReasonStr,
+                data => #{filename => JsonFile}
+            }}
     end.
 
 make_json_result(Ret) ->
@@ -69,9 +75,14 @@ make_json_result(Ret) ->
 get_tool_description(Def) ->
     Desc = maps:get(<<"description">>, Def),
     case maps:get(<<"outputSchema">>, Def, null) of
-        null -> Desc;
+        null ->
+            Desc;
         OutputSchema when is_map(OutputSchema) ->
-            erlang:iolist_to_binary([Desc, " The return of the function is a JSON formatted string with the following Schema definition: ", json:encode(OutputSchema)])
+            erlang:iolist_to_binary([
+                Desc,
+                " The return of the function is a JSON formatted string with the following Schema definition: ",
+                json:encode(OutputSchema)
+            ])
     end.
 
 format_error_msg(Format, ErrorTerms) ->

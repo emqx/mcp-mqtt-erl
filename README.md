@@ -1,9 +1,9 @@
 mcp_mqtt_erl
 =====
 
-An OTP application
+The MCP over MQTT Erlang SDK for both MCP clients and servers.
 
 Build
 -----
 
-    $ rebar3 compile
+    $ make compile

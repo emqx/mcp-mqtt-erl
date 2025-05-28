@@ -4,7 +4,8 @@
     mcp_client_id := binary()
 }.
 
--type mcp_msg_type() :: mcp_server_sent_msg_type() | mcp_client_sent_msg_type() | mcp_common_msg_type().
+-type mcp_msg_type() ::
+    mcp_server_sent_msg_type() | mcp_client_sent_msg_type() | mcp_common_msg_type().
 
 -type mcp_common_msg_type() ::
     ping
@@ -79,14 +80,16 @@
 
 -type image_content() :: #{
     type := image,
-    data := binary(), %% base64-encoded-data
+    %% base64-encoded-data
+    data := binary(),
     mimeType := binary(),
     annotations => annotations()
 }.
 
 -type audio_content() :: #{
     type := audio,
-    data := binary(), %% base64-encoded-data
+    %% base64-encoded-data
+    data := binary(),
     mimeType := binary(),
     annotations => annotations()
 }.
@@ -97,7 +100,8 @@
     annotations => annotations()
 }.
 
--type call_tool_result() :: text_content() | image_content() | audio_content() | embedded_resource().
+-type call_tool_result() ::
+    text_content() | image_content() | audio_content() | embedded_resource().
 
 -type input_schema() :: #{
     type := object,

@@ -45,16 +45,19 @@
 
 -export([validate_server_id/1]).
 
--export([get_mcp_component_type_from_mqtt_props/1,
-         get_mcp_client_id_from_mqtt_props/1]).
+-export([
+    get_mcp_component_type_from_mqtt_props/1,
+    get_mcp_client_id_from_mqtt_props/1
+]).
 
--type topic_type() :: server_control
-                     | server_capability_list_changed
-                     | server_resources_updated
-                     | server_presence
-                     | client_presence
-                     | client_capability_list_changed
-                     | rpc.
+-type topic_type() ::
+    server_control
+    | server_capability_list_changed
+    | server_resources_updated
+    | server_presence
+    | client_presence
+    | client_capability_list_changed
+    | rpc.
 -type flags() :: #{retain => boolean(), qos => 0..2}.
 
 %%==============================================================================
@@ -207,19 +210,43 @@ send_server_online_message(MqttClient, ServerId, ServerName, ServerDesc, ServerM
         <<"description">> => ServerDesc,
         <<"meta">> => ServerMeta
     }),
-    Result = publish_mcp_server_message(MqttClient, ServerId, ServerName, undefined, server_presence,
-            #{retain => true}, Payload),
+    Result = publish_mcp_server_message(
+        MqttClient,
+        ServerId,
+        ServerName,
+        undefined,
+        server_presence,
+        #{retain => true},
+        Payload
+    ),
     ok_if_no_subscribers(Result).
 
 send_server_offline_message(MqttClient, ServerId, ServerName) ->
     %% Empty payload for offline message
-    Result = publish_mcp_server_message(MqttClient, ServerId, ServerName, undefined, server_presence,
-        #{retain => true}, <<>>),
+    Result = publish_mcp_server_message(
+        MqttClient,
+        ServerId,
+        ServerName,
+        undefined,
+        server_presence,
+        #{retain => true},
+        <<>>
+    ),
     ok_if_no_subscribers(Result).
 
--spec publish_mcp_server_message(MqttClient :: pid() | local, ServerId :: binary(), ServerName :: binary(), McpClientId :: binary() | undefined, topic_type(), flags(), Payload :: binary()) ->
+-spec publish_mcp_server_message(
+    MqttClient :: pid() | local,
+    ServerId :: binary(),
+    ServerName :: binary(),
+    McpClientId :: binary() | undefined,
+    topic_type(),
+    flags(),
+    Payload :: binary()
+) ->
     ok | {error, #{reason := term(), _ => _}}.
-publish_mcp_server_message(MqttClient, ServerId, ServerName, McpClientId, TopicType, Flags, Payload) ->
+publish_mcp_server_message(
+    MqttClient, ServerId, ServerName, McpClientId, TopicType, Flags, Payload
+) ->
     Topic = get_topic(TopicType, #{
         server_id => ServerId,
         server_name => ServerName,
