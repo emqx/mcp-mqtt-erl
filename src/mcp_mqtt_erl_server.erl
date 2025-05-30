@@ -123,8 +123,9 @@ send_notification(Pid, Notif) ->
 init({Idx, BrokerAddr, Mod, MqttOpts}) ->
     process_flag(trap_exit, true),
     ServerName = Mod:server_name(),
+    ClientIdPrefix = maps:get(clientid_prefix, MqttOpts, <<>>),
     ServerId =
-        case Mod:server_id(Idx) of
+        case Mod:server_id(ClientIdPrefix, Idx) of
             random -> list_to_binary(emqx_utils:gen_id());
             Id -> mcp_mqtt_erl_msg:validate_server_id(Id)
         end,
@@ -154,7 +155,7 @@ init({Idx, BrokerAddr, Mod, MqttOpts}) ->
                 will_qos => 1,
                 clean_start => true
             },
-            {ok, idle, LoopData#{mqtt_options => MqttOpts1}, [
+            {ok, idle, LoopData#{mqtt_options => maps:remove(clientid_prefix, MqttOpts1)}, [
                 {next_event, internal, connect_broker}
             ]}
     end.

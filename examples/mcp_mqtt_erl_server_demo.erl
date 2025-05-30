@@ -27,7 +27,7 @@
 
 -export([
     server_name/0,
-    server_id/1,
+    server_id/2,
     server_version/0,
     server_capabilities/0,
     server_instructions/0,
@@ -65,11 +65,10 @@ server_version() ->
 server_name() ->
     <<"emqx_tools/info_apis">>.
 
-server_id(Idx) ->
-    Name = <<"emqx_tool_info_apis">>,
+server_id(ClientIdPrefix, Idx) ->
     Idx1 = integer_to_binary(Idx),
     Node = atom_to_binary(node()),
-    <<Name/binary, ":", Node/binary, ":", Idx1/binary>>.
+    <<ClientIdPrefix/binary, ":", Node/binary, ":", Idx1/binary>>.
 
 server_capabilities() ->
     #{

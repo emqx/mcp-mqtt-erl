@@ -93,7 +93,7 @@
 -callback server_version() -> binary().
 -callback server_instructions() -> binary().
 -callback server_meta() -> map().
--callback server_id(integer()) -> binary() | random.
+-callback server_id(binary(), integer()) -> binary() | random.
 -callback server_capabilities() -> map().
 
 -callback initialize(ServerId :: binary(), client_params()) ->
