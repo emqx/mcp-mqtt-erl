@@ -62,8 +62,8 @@
 -type user_defined_error_code() :: 10000..20000.
 
 -type error_response() :: #{
-    code => user_defined_error_code(),
-    message => binary(),
+    code := user_defined_error_code(),
+    message := binary(),
     data => map()
 }.
 

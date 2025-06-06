@@ -596,5 +596,5 @@ start_rpc_timer(McpClientId, ReqId) ->
 ts_now() ->
     erlang:system_time(microsecond).
 
-ensure_list(Term) when is_list(Term) -> true;
+ensure_list(Term) when is_list(Term) -> Term;
 ensure_list(Term) -> [Term].
