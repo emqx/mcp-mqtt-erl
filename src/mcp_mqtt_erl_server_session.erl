@@ -430,7 +430,7 @@ handle_json_rpc_request(Session, <<"tools/call">>, ReqId, #{
     case maybe_call(Mod, call_tool, [ToolName, Args, LoopData]) of
         {ok, Result, LoopData1} ->
             CallToolResp = mcp_mqtt_erl_msg:json_rpc_response(ReqId, #{
-                <<"content">> => ensure_list(Result),
+                <<"content">> => validate_tool_results(ensure_list(Result)),
                 <<"isError">> => false
             }),
             {ok, CallToolResp, Session#{loop_data => LoopData1}};
@@ -598,3 +598,11 @@ ts_now() ->
 
 ensure_list(Term) when is_list(Term) -> Term;
 ensure_list(Term) -> [Term].
+
+-define(TOOL_RESULT_TYPE(T), T =:= text; T =:= image; T =:= audio; T =:= resource).
+validate_tool_results(Results) ->
+    lists:map(
+        fun (#{type := T} = R) when ?TOOL_RESULT_TYPE(T) -> R;
+            (R) -> throw({invalid_tool_result, R})
+        end,
+        Results).
