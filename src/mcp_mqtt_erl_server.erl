@@ -46,7 +46,7 @@
 
 -type mcp_client_id() :: binary().
 
--type broker_address() :: {emqtt:host(), emqtt:port()} | local.
+-type broker_address() :: {emqtt:host(), integer()} | local.
 
 -type config() :: #{
     broker_address := broker_address(),
