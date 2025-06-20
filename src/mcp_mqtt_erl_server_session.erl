@@ -32,6 +32,7 @@
 
 -export([
     init/4,
+    destroy/1,
     handle_rpc_msg/2,
     handle_rpc_timeout/2,
     send_server_request/3,
@@ -215,13 +216,26 @@ init(
             Err
     end.
 
+-spec destroy(t()) -> ok.
+destroy(#{mqtt_client := MqttClient} = Session) ->
+    %% unsubscribe topics
+    unsubscribe_session_topics(MqttClient, Session).
+
 subscribe_session_topics(MqttClient, Info) ->
-    ClientCapaTopic = mcp_mqtt_erl_msg:get_topic(client_capability_list_changed, Info),
+    ClientCapaTopic = mcp_mqtt_erl_msg:get_topic(client_capability_changed, Info),
     ClientPresenceTopic = mcp_mqtt_erl_msg:get_topic(client_presence, Info),
     RpcTopic = mcp_mqtt_erl_msg:get_topic(rpc, Info),
-    ok = mcp_mqtt_erl_msg:subscribe_topic(MqttClient, ClientCapaTopic, #{qos => 1}),
-    ok = mcp_mqtt_erl_msg:subscribe_topic(MqttClient, ClientPresenceTopic, #{qos => 1}),
-    ok = mcp_mqtt_erl_msg:subscribe_topic(MqttClient, RpcTopic, #{qos => 1, nl => true}).
+    ok = mcp_mqtt_erl_msg:subscribe_topic(MqttClient, ClientCapaTopic, #{}),
+    ok = mcp_mqtt_erl_msg:subscribe_topic(MqttClient, ClientPresenceTopic, #{}),
+    ok = mcp_mqtt_erl_msg:subscribe_topic(MqttClient, RpcTopic, #{nl => true}).
+
+unsubscribe_session_topics(MqttClient, Info) ->
+    ClientCapaTopic = mcp_mqtt_erl_msg:get_topic(client_capability_changed, Info),
+    ClientPresenceTopic = mcp_mqtt_erl_msg:get_topic(client_presence, Info),
+    RpcTopic = mcp_mqtt_erl_msg:get_topic(rpc, Info),
+    ok = mcp_mqtt_erl_msg:unsubscribe_topic(MqttClient, ClientCapaTopic),
+    ok = mcp_mqtt_erl_msg:unsubscribe_topic(MqttClient, ClientPresenceTopic),
+    ok = mcp_mqtt_erl_msg:unsubscribe_topic(MqttClient, RpcTopic).
 
 send_server_request(Session, Caller, #{method := <<"ping">>} = Req) ->
     do_send_server_request(Session, Caller, Req);
@@ -508,7 +522,10 @@ handle_json_rpc_notification(
         {error, _} = Err ->
             ?LOG_T(error, #{msg => send_root_list_failed, error => Err}),
             {ok, Session}
-    end.
+    end;
+handle_json_rpc_notification(Session, <<"notifications/disconnected">>, _) ->
+    ?LOG_T(info, #{msg => client_disconnected, mcp_client_id => maps:get(mcp_client_id, Session)}),
+    {terminated, client_disconnected}.
 
 handle_json_rpc_response(
     #{pending_requests := Pendings0, timers := Timers} = Session, ReqId, Result

@@ -38,6 +38,7 @@
 -export([
     subscribe_server_control_topic/3,
     subscribe_topic/3,
+    unsubscribe_topic/2,
     send_server_online_message/5,
     send_server_offline_message/3,
     publish_mcp_server_message/7
@@ -52,13 +53,13 @@
 
 -type topic_type() ::
     server_control
-    | server_capability_list_changed
-    | server_resources_updated
+    | server_capability_changed
     | server_presence
     | client_presence
-    | client_capability_list_changed
+    | client_capability_changed
     | rpc.
 -type flags() :: #{retain => boolean(), qos => 0..2}.
+-define(QOS, 0).
 
 %%==============================================================================
 %% MCP Requests/Responses/Notifications
@@ -162,16 +163,16 @@ topic_type_of_rpc_msg(Msg) when is_binary(Msg) ->
 topic_type_of_rpc_msg(#{method := <<"initialize">>}) ->
     server_control;
 topic_type_of_rpc_msg(#{method := <<"notifications/resources/updated">>}) ->
-    server_resources_updated;
+    server_capability_changed;
 topic_type_of_rpc_msg(#{method := <<"notifications/server/online">>}) ->
     server_presence;
 topic_type_of_rpc_msg(#{method := <<"notifications/disconnected">>}) ->
     client_presence;
 topic_type_of_rpc_msg(#{method := <<"notifications/roots/list_changed">>}) ->
-    client_capability_list_changed;
+    client_capability_changed;
 topic_type_of_rpc_msg(#{type := json_rpc_notification, method := Method}) ->
     case string:find(Method, <<"/list_changed">>) of
-        <<"/list_changed">> -> server_capability_list_changed;
+        <<"/list_changed">> -> server_capability_changed;
         _ -> rpc
     end;
 topic_type_of_rpc_msg(_) ->
@@ -179,28 +180,34 @@ topic_type_of_rpc_msg(_) ->
 
 get_topic(server_control, #{server_id := ServerId, server_name := ServerName}) ->
     <<"$mcp-server/", ServerId/binary, "/", ServerName/binary>>;
-get_topic(server_capability_list_changed, #{server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-server/capability/list-changed/", ServerId/binary, "/", ServerName/binary>>;
-get_topic(server_resources_updated, #{server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-server/capability/resource-updated/", ServerId/binary, "/", ServerName/binary>>;
+get_topic(server_capability_changed, #{server_id := ServerId, server_name := ServerName}) ->
+    <<"$mcp-server/capability/", ServerId/binary, "/", ServerName/binary>>;
 get_topic(server_presence, #{server_id := ServerId, server_name := ServerName}) ->
     <<"$mcp-server/presence/", ServerId/binary, "/", ServerName/binary>>;
 get_topic(client_presence, #{mcp_client_id := McpClientId}) ->
     <<"$mcp-client/presence/", McpClientId/binary>>;
-get_topic(client_capability_list_changed, #{mcp_client_id := McpClientId}) ->
-    <<"$mcp-client/capability/list-changed/", McpClientId/binary>>;
+get_topic(client_capability_changed, #{mcp_client_id := McpClientId}) ->
+    <<"$mcp-client/capability/", McpClientId/binary>>;
 get_topic(rpc, #{mcp_client_id := McpClientId, server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-rpc-endpoint/", McpClientId/binary, "/", ServerId/binary, "/", ServerName/binary>>.
+    <<"$mcp-rpc/", McpClientId/binary, "/", ServerId/binary, "/", ServerName/binary>>.
 
 subscribe_server_control_topic(MqttClient, ServerId, ServerName) ->
     Topic = get_topic(server_control, #{server_id => ServerId, server_name => ServerName}),
-    subscribe_topic(MqttClient, Topic, #{qos => 1}).
+    subscribe_topic(MqttClient, Topic, #{qos => ?QOS}).
 
 subscribe_topic(local, Topic, SubOpts) ->
     emqx:subscribe(Topic, SubOpts);
 subscribe_topic(MqttClient, Topic, SubOpts) ->
-    case emqtt:subscribe(MqttClient, Topic, maps:to_list(SubOpts)) of
+    case emqtt:subscribe(MqttClient, Topic, maps:to_list(SubOpts#{qos => ?QOS})) of
         {ok, _Props, _} -> ok;
+        {error, _} = Err -> Err
+    end.
+
+unsubscribe_topic(local, Topic) ->
+    emqx:unsubscribe(Topic);
+unsubscribe_topic(MqttClient, Topic) ->
+    case emqtt:unsubscribe(MqttClient, Topic) of
+        {ok, _, _} -> ok;
         {error, _} = Err -> Err
     end.
 
@@ -264,8 +271,7 @@ do_publish_mcp_server_message(local, Topic, ServerId, Payload, Flags) ->
             'User-Property' => UserProps
         }
     },
-    QoS = 1,
-    MqttMsg = emqx_message:make(ServerId, QoS, Topic, Payload, Flags, Headers),
+    MqttMsg = emqx_message:make(ServerId, ?QOS, Topic, Payload, Flags, Headers),
     _ = emqx:publish(MqttMsg),
     ok;
 do_publish_mcp_server_message(MqttClient, Topic, ServerId, Payload, Flags) ->
@@ -275,8 +281,7 @@ do_publish_mcp_server_message(MqttClient, Topic, ServerId, Payload, Flags) ->
             {<<"MCP-MQTT-CLIENT-ID">>, ServerId}
         ]
     },
-    QoS = 1,
-    Result = emqtt:publish(MqttClient, Topic, PubProps, Payload, maps:to_list(Flags#{qos => QoS})),
+    Result = emqtt:publish(MqttClient, Topic, PubProps, Payload, maps:to_list(Flags#{qos => ?QOS})),
     handle_pub_result(Result).
 
 get_mcp_component_type_from_mqtt_props(#{'User-Property' := UserProps}) ->
