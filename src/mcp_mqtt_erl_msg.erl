@@ -37,11 +37,14 @@
 
 -export([
     subscribe_server_control_topic/3,
+    subscribe_server_presence_topic/3,
     subscribe_topic/3,
     unsubscribe_topic/2,
     send_server_online_message/5,
     send_server_offline_message/3,
-    publish_mcp_server_message/7
+    send_client_offline_message/2,
+    publish_mcp_server_message/7,
+    publish_mcp_client_message/7
 ]).
 
 -export([validate_server_id/1]).
@@ -195,6 +198,10 @@ subscribe_server_control_topic(MqttClient, ServerId, ServerName) ->
     Topic = get_topic(server_control, #{server_id => ServerId, server_name => ServerName}),
     subscribe_topic(MqttClient, Topic, #{qos => ?QOS}).
 
+subscribe_server_presence_topic(MqttClient, ServerId, ServerName) ->
+    Topic = get_topic(server_presence, #{server_id => ServerId, server_name => ServerName}),
+    subscribe_topic(MqttClient, Topic, #{qos => ?QOS}).
+
 subscribe_topic(local, Topic, SubOpts) ->
     emqx:subscribe(Topic, SubOpts);
 subscribe_topic(MqttClient, Topic, SubOpts) ->
@@ -241,6 +248,21 @@ send_server_offline_message(MqttClient, ServerId, ServerName) ->
     ),
     ok_if_no_subscribers(Result).
 
+send_client_offline_message(MqttClient, McpClientId) ->
+    Result = publish_mcp_client_message(
+        MqttClient,
+        undefined,
+        undefined,
+        McpClientId,
+        client_presence,
+        #{retain => false},
+        #{
+            <<"jsonrpc">> => <<"2.0">>,
+            <<"method">> => <<"notifications/disconnected">>
+        }
+    ),
+    ok_if_no_subscribers(Result).
+
 -spec publish_mcp_server_message(
     MqttClient :: pid() | local,
     ServerId :: binary(),
@@ -279,6 +301,23 @@ do_publish_mcp_server_message(MqttClient, Topic, ServerId, Payload, Flags) ->
         'User-Property' => [
             {<<"MCP-COMPONENT-TYPE">>, <<"mcp-server">>},
             {<<"MCP-MQTT-CLIENT-ID">>, ServerId}
+        ]
+    },
+    Result = emqtt:publish(MqttClient, Topic, PubProps, Payload, maps:to_list(Flags#{qos => ?QOS})),
+    handle_pub_result(Result).
+
+publish_mcp_client_message(
+    MqttClient, ServerId, ServerName, McpClientId, TopicType, Flags, Payload
+) ->
+    Topic = get_topic(TopicType, #{
+        server_id => ServerId,
+        server_name => ServerName,
+        mcp_client_id => McpClientId
+    }),
+    PubProps = #{
+        'User-Property' => [
+            {<<"MCP-COMPONENT-TYPE">>, <<"mcp-client">>},
+            {<<"MCP-MQTT-CLIENT-ID">>, McpClientId}
         ]
     },
     Result = emqtt:publish(MqttClient, Topic, PubProps, Payload, maps:to_list(Flags#{qos => ?QOS})),
