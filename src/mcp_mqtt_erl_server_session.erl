@@ -242,9 +242,9 @@ send_server_request(Session, Caller, #{method := <<"ping">>} = Req) ->
 send_server_request(#{state := initialized} = Session, Caller, Req) ->
     do_send_server_request(Session, Caller, Req);
 send_server_request(Session, Caller, Req) ->
-    maybe_reply_to_caller(
+    {ok, maybe_reply_to_caller(
         Session, Caller, Req, {error, #{reason => ?ERR_NOT_INITIALIZED, request => Req}}
-    ).
+    )}.
 
 do_send_server_request(
     #{pending_requests := Pendings, timers := Timers, mcp_client_id := McpClientId} = Session,

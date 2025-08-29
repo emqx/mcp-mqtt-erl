@@ -14,7 +14,7 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
--module(mcp_mqtt_erl_server_session).
+-module(mcp_mqtt_erl_client_session).
 -feature(maybe_expr, enable).
 
 -include("mcp_mqtt_erl_errors.hrl").
@@ -63,7 +63,7 @@
 -type pending_requests() :: #{
     integer() => #{
         method := binary(),
-        caller := pid(),
+        caller := pid() | no_caller,
         timestamp := integer()
     }
 }.
@@ -73,14 +73,11 @@
     _ => _
 }.
 
--type loop_data() :: any().
-
 -callback client_name() -> binary().
 -callback client_version() -> binary().
 -callback client_capabilities() -> map().
-
--callback initialize(ServerId :: binary(), client_params()) ->
-    {ok, loop_data()} | {error, error_response()}.
+-callback received_non_mcp_message(MqttClient:: pid(), Msg :: map(), AppState :: term())
+    -> AppState :: term().
 
 -define(MAX_PAGE_SIZE, 10).
 -define(LOG_T(LEVEL, REPORT), logger:log(LEVEL, maps:put(tag, "MCP_SERVER_SESSION", REPORT))).
@@ -121,8 +118,9 @@ init(
         {ok, ServerParams} ?=
             verify_server_precense_params(PresenceParams),
         %% send initialize request to server
+        ReqId = 1,
         Initialize = mcp_mqtt_erl_msg:initialize_request(
-            ClientInfo, Capabilities
+            ReqId, ClientInfo, Capabilities
         ),
         Info = #{
             mcp_client_id => McpClientId,
@@ -132,7 +130,7 @@ init(
         ok = subscribe_session_topics(MqttClient, Info),
         ok ?=
             mcp_mqtt_erl_msg:publish_mcp_client_message(
-                MqttClient, ServerId, ServerName, McpClientId, rpc, #{}, Initialize
+                MqttClient, ServerId, ServerName, McpClientId, server_control, #{}, Initialize
             ),
         {ok, ServerParams#{
             state => created,
@@ -141,7 +139,12 @@ init(
             server_id => ServerId,
             server_name => ServerName,
             mcp_client_id => McpClientId,
-            pending_requests => #{}
+            timers => #{
+                ReqId => start_rpc_timer(ServerName, ReqId)
+            },
+            pending_requests => #{
+                ReqId => #{method => <<"initialize">>, timestamp => ts_now(), caller => no_caller}
+            }
         }}
     else
         {error, _} = Err ->
@@ -170,9 +173,9 @@ send_client_request(Session, Caller, #{method := <<"ping">>} = Req) ->
 send_client_request(#{state := initialized} = Session, Caller, Req) ->
     do_send_client_request(Session, Caller, Req);
 send_client_request(Session, Caller, Req) ->
-    maybe_reply_to_caller(
+    {ok, maybe_reply_to_caller(
         Session, Caller, Req, {error, #{reason => ?ERR_NOT_INITIALIZED, request => Req}}
-    ).
+    )}.
 
 do_send_client_request(
     #{pending_requests := Pendings, timers := Timers, server_name := ServerName} = Session,
@@ -223,6 +226,8 @@ handle_json_rpc_error(#{pending_requests := Pendings0, timers := Timers} = Sessi
 
 handle_rpc_timeout(#{pending_requests := Pendings0, timers := Timers} = Session, ReqId) ->
     case maps:take(ReqId, Pendings0) of
+        {#{method := <<"initialize">>}, _Pendings} ->
+            {terminated, #{reason => initialize_timeout}};
         {#{caller := Caller}, Pendings} ->
             gen_statem:reply(Caller, {error, #{reason => ?ERR_TIMEOUT}}),
             {ok, Session#{pending_requests => Pendings, timers := maps:remove(ReqId, Timers)}};
@@ -244,15 +249,17 @@ handle_json_rpc_notification(Session, <<"notifications/disconnected">>, _) ->
 handle_json_rpc_response(
     #{pending_requests := Pendings0, timers := Timers} = Session, ReqId, Result
 ) ->
+    {TRef, Timers1} = maps:take(ReqId, Timers),
+    _ = erlang:cancel_timer(TRef),
     case maps:take(ReqId, Pendings0) of
+        {#{method := <<"initialize">>}, Pendings} ->
+            InitNotif = mcp_mqtt_erl_msg:initialized_notification(),
+            publish_mcp_client_message(Session, rpc, #{}, InitNotif),
+            {ok, Session#{pending_requests => Pendings, timers := Timers1, state := initialized}};
         {#{caller := Caller} = PendingReq, Pendings} ->
-            {TRef, Timers1} = maps:take(ReqId, Timers),
-            _ = erlang:cancel_timer(TRef),
             Session1 = maybe_reply_to_caller(Session, Caller, PendingReq, {ok, Result}),
             {ok, Session1#{pending_requests => Pendings, timers := Timers1}};
         {_, Pendings} ->
-            {TRef, Timers1} = maps:take(ReqId, Timers),
-            _ = erlang:cancel_timer(TRef),
             ?LOG_T(error, #{msg => no_caller_to_reply, id => ReqId}),
             {ok, Session#{pending_requests => Pendings, timers := Timers1}};
         error ->
@@ -277,7 +284,7 @@ verify_server_precense_params(Params) ->
         {ok, Meta} ?= maps:find(<<"meta">>, Params),
         {ok, #{
             description => Description,
-            client_capabilities => Meta
+            server_meta => Meta
         }}
     else
         error ->

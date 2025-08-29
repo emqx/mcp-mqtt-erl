@@ -91,8 +91,9 @@
 start_link(#{callback_mod := Mod, broker_address := BrokerAddr} = Conf) ->
     MqttOpts = maps:get(mqtt_options, Conf, #{}),
     ClientID = maps:get(clientid, MqttOpts, <<>>),
+    ServerNameFilter = maps:get(server_name_filter, Conf, #{}),
     RegisterName = process_name(ClientID),
-    gen_statem:start_link({local, RegisterName}, ?MODULE, {BrokerAddr, Mod, MqttOpts}, []).
+    gen_statem:start_link({local, RegisterName}, ?MODULE, {BrokerAddr, Mod, ServerNameFilter, MqttOpts}, []).
 
 stop(Pid) ->
     gen_statem:cast(Pid, stop).
@@ -105,11 +106,10 @@ send_request(Pid, ServerName, Req) ->
     gen_statem:call(Pid, {client_request, ServerName, Req}, {clean_timeout, ?REQUEST_TIMEOUT}).
 
 %% gen_statem callbacks
--spec init({broker_address(), module(), map()}) ->
+-spec init({broker_address(), module(), binary(), map()}) ->
     {ok, state_name(), loop_data(), [gen_statem:action()]}.
-init({BrokerAddr, Mod, MqttOpts}) ->
+init({BrokerAddr, Mod, ServerNameFilter, MqttOpts}) ->
     process_flag(trap_exit, true),
-    ServerNameFilter = Mod:server_name_filter(),
     ClientID = maps:get(clientid, MqttOpts, <<>>),
     LoopData = #{
         callback_mod => Mod,
@@ -200,6 +200,7 @@ connected(
     #{callback_mod := Mod, mqtt_client := MqttClient} = LoopData
 ) ->
     maybe
+        ?LOG_T(debug, #{msg => received_server_online_msg, details => Msg}),
         {ServerId, ServerName} = split_id_and_server_name(ServerIdAndName),
         Sessions = maps:get(sessions, LoopData),
         McpClientId = maps:get(mcp_client_id, LoopData),
@@ -236,7 +237,8 @@ connected(
     }},
     #{sessions := Sessions} = LoopData
 ) ->
-    {_, ServerName} = split_id_and_server_name(ClientIdAndServerName),
+    {_McpClientId, ServerIdAndName} = split_id_and_server_name(ClientIdAndServerName),
+    {_ServerId, ServerName} = split_id_and_server_name(ServerIdAndName),
     case maps:find(ServerName, Sessions) of
         {ok, Session} ->
             case mcp_mqtt_erl_msg:decode_rpc_msg(Payload) of
@@ -258,12 +260,12 @@ connected(
                     {keep_state, LoopData}
             end;
         error ->
-            ?LOG_T(error, #{msg => handle_rpc_failed, reason => session_not_found}),
+            ?LOG_T(error, #{msg => handle_rpc_failed, reason => session_not_found, server_name => ServerName}),
             {keep_state, LoopData}
     end;
-connected(info, {publish, #{topic := Topic} = Msg}, #{callback_mod := Mod}) ->
+connected(info, {publish, #{topic := Topic} = Msg}, #{callback_mod := Mod, mqtt_client := MqttClient} = LoopData) ->
     ?LOG_T(warning, #{msg => unsupported_topic, topic => Topic}),
-    Mod:received_non_mcp_message(Msg),
+    Mod:received_non_mcp_message(MqttClient, Msg, maps:get(app_state, LoopData, #{})),
     keep_state_and_data;
 connected(info, {rpc_request_timeout, ServerName, ReqId}, #{sessions := Sessions} = LoopData) ->
     case maps:find(ServerName, Sessions) of

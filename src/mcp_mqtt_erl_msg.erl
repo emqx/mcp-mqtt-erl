@@ -256,10 +256,7 @@ send_client_offline_message(MqttClient, McpClientId) ->
         McpClientId,
         client_presence,
         #{retain => false},
-        #{
-            <<"jsonrpc">> => <<"2.0">>,
-            <<"method">> => <<"notifications/disconnected">>
-        }
+        json_rpc_notification(<<"notifications/disconnected">>)
     ),
     ok_if_no_subscribers(Result).
 
