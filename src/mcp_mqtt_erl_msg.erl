@@ -44,7 +44,8 @@
     send_server_offline_message/3,
     send_client_offline_message/2,
     publish_mcp_server_message/7,
-    publish_mcp_client_message/7
+    publish_mcp_client_message/7,
+    publish_non_mcp_message/5
 ]).
 
 -export([validate_server_id/1]).
@@ -318,6 +319,10 @@ publish_mcp_client_message(
         ]
     },
     Result = emqtt:publish(MqttClient, Topic, PubProps, Payload, maps:to_list(Flags#{qos => ?QOS})),
+    handle_pub_result(Result).
+
+publish_non_mcp_message(MqttClient, Topic, Payload, Props, Flags) ->
+    Result = emqtt:publish(MqttClient, Topic, Props, Payload, maps:to_list(Flags)),
     handle_pub_result(Result).
 
 get_mcp_component_type_from_mqtt_props(#{'User-Property' := UserProps}) ->

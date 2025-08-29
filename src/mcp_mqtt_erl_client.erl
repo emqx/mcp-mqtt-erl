@@ -30,7 +30,8 @@
 ]).
 
 -export([
-    send_request/3
+    send_request/3,
+    publish_non_mcp_message/2
 ]).
 
 %% gen_statem callbacks
@@ -104,6 +105,9 @@ process_name(ClientID) ->
 -spec send_request(pid(), server_name(), client_request()) -> Reply :: term().
 send_request(Pid, ServerName, Req) ->
     gen_statem:call(Pid, {client_request, ServerName, Req}, {clean_timeout, ?REQUEST_TIMEOUT}).
+
+publish_non_mcp_message(Pid, Msg) ->
+    gen_statem:call(Pid, {publish_non_mcp_message, Msg}).
 
 %% gen_statem callbacks
 -spec init({broker_address(), module(), binary(), map()}) ->
@@ -185,6 +189,9 @@ connected({call, Caller}, {client_request, ServerName, Req}, #{sessions := Sessi
             ?LOG_T(error, #{msg => send_client_request_failed, reason => session_not_found}),
             {keep_state, LoopData}
     end;
+connected({call, Caller}, {publish_non_mcp_message, Msg}, #{mqtt_client := MqttClient} = LoopData) ->
+    Reply = mcp_mqtt_erl_msg:publish_non_mcp_message(MqttClient, maps:get(topic, Msg), maps:get(payload, Msg, <<>>), maps:get(properties, Msg, #{}), maps:get(flags, Msg, #{})),
+    {keep_state, LoopData, [{reply, Caller, Reply}]};
 connected(
     info,
     {publish, #{topic := <<"$mcp-server/presence/", ServerIdAndName/binary>>, payload := <<>>}},
